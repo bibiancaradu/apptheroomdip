@@ -25,24 +25,26 @@ interface TimeEntry {
   status: string;
 }
 
+type FilterStatus = 'pending' | 'approved' | 'rejected';
+
 export default function ApprovalsScreen() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
 
   useEffect(() => {
-    fetchPendingApprovals();
-  }, []);
+    fetchApprovals();
+  }, [filterStatus]);
 
-  const fetchPendingApprovals = async () => {
+  const fetchApprovals = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`${BACKEND_URL}/api/approvals`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${BACKEND_URL}/api/approvals?status_filter=${filterStatus}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -58,7 +60,7 @@ export default function ApprovalsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchPendingApprovals();
+    fetchApprovals();
   };
 
   const handleApproval = async (entryId: string, status: 'approved' | 'rejected') => {
@@ -79,10 +81,10 @@ export default function ApprovalsScreen() {
           'Successo',
           status === 'approved' ? 'Richiesta approvata' : 'Richiesta rifiutata'
         );
-        fetchPendingApprovals();
+        fetchApprovals();
       } else {
         const data = await response.json();
-        Alert.alert('Errore', data.detail || 'Errore durante l\'operazione');
+        Alert.alert('Errore', data.detail || 'Errore durante operazione');
       }
     } catch (error) {
       console.error('Error processing approval:', error);
@@ -94,29 +96,38 @@ export default function ApprovalsScreen() {
 
   const getTypeText = (type: string) => {
     switch (type) {
-      case 'vacation':
-        return 'Ferie';
-      case 'permit':
-        return 'Permesso';
-      case 'sick':
-        return 'Malattia';
-      case 'other':
-        return 'Altro';
-      default:
-        return type;
+      case 'vacation': return 'Ferie';
+      case 'permit': return 'Permesso';
+      case 'sick': return 'Malattia';
+      case 'other': return 'Altro';
+      default: return type;
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'vacation':
-        return '#3498db';
-      case 'permit':
-        return '#f39c12';
-      case 'sick':
-        return '#e74c3c';
-      default:
-        return '#999';
+      case 'vacation': return '#3498db';
+      case 'permit': return '#f39c12';
+      case 'sick': return '#e74c3c';
+      default: return '#999';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return '#27ae60';
+      case 'pending': return '#f39c12';
+      case 'rejected': return '#e74c3c';
+      default: return '#999';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Approvato';
+      case 'pending': return 'In attesa';
+      case 'rejected': return 'Rifiutato';
+      default: return status;
     }
   };
 
@@ -156,70 +167,115 @@ export default function ApprovalsScreen() {
         )}
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.rejectButton]}
-          onPress={() => handleApproval(item.id, 'rejected')}
-          disabled={processingId === item.id}
-        >
-          {processingId === item.id ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="close-circle" size={20} color="#fff" />
-              <Text style={styles.actionButtonText}>Rifiuta</Text>
-            </>
-          )}
-        </TouchableOpacity>
+      {item.status === 'pending' ? (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => handleApproval(item.id, 'rejected')}
+            disabled={processingId === item.id}
+          >
+            {processingId === item.id ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="close-circle" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Rifiuta</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.approveButton]}
-          onPress={() => handleApproval(item.id, 'approved')}
-          disabled={processingId === item.id}
-        >
-          {processingId === item.id ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
-              <Text style={styles.actionButtonText}>Approva</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.approveButton]}
+            onPress={() => handleApproval(item.id, 'approved')}
+            disabled={processingId === item.id}
+          >
+            {processingId === item.id ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Approva</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={[styles.statusFooter, { backgroundColor: getStatusColor(item.status) + '22', borderColor: getStatusColor(item.status) }]}>
+          <Ionicons
+            name={item.status === 'approved' ? 'checkmark-circle' : 'close-circle'}
+            size={20}
+            color={getStatusColor(item.status)}
+          />
+          <Text style={[styles.statusFooterText, { color: getStatusColor(item.status) }]}>
+            {getStatusText(item.status)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#e74c3c" />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <FlatList
-        data={entries}
-        renderItem={renderEntry}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#e74c3c"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="checkmark-done-circle" size={64} color="#27ae60" />
-            <Text style={styles.emptyText}>Nessuna richiesta in attesa</Text>
-            <Text style={styles.emptySubtext}>Tutte le richieste sono state processate</Text>
-          </View>
-        }
-      />
+      <View style={styles.filterTabs}>
+        <TouchableOpacity
+          style={[styles.filterTab, filterStatus === 'pending' && styles.filterTabActive]}
+          onPress={() => setFilterStatus('pending')}
+        >
+          <Text style={[styles.filterText, filterStatus === 'pending' && styles.filterTextActive]}>
+            In Attesa
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filterStatus === 'approved' && styles.filterTabActive]}
+          onPress={() => setFilterStatus('approved')}
+        >
+          <Text style={[styles.filterText, filterStatus === 'approved' && styles.filterTextActive]}>
+            Approvate
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterTab, filterStatus === 'rejected' && styles.filterTabActive]}
+          onPress={() => setFilterStatus('rejected')}
+        >
+          <Text style={[styles.filterText, filterStatus === 'rejected' && styles.filterTextActive]}>
+            Rifiutate
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#e74c3c" />
+        </View>
+      ) : (
+        <FlatList
+          data={entries}
+          renderItem={renderEntry}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#e74c3c"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons
+                name={filterStatus === 'pending' ? 'checkmark-done-circle' : 'folder-open-outline'}
+                size={64}
+                color={filterStatus === 'pending' ? '#27ae60' : '#333'}
+              />
+              <Text style={styles.emptyText}>
+                {filterStatus === 'pending' && 'Nessuna richiesta in attesa'}
+                {filterStatus === 'approved' && 'Nessuna richiesta approvata'}
+                {filterStatus === 'rejected' && 'Nessuna richiesta rifiutata'}
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -234,6 +290,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0c0c0c',
+  },
+  filterTabs: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  filterTab: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  filterTabActive: {
+    backgroundColor: '#e74c3c',
+    borderColor: '#e74c3c',
+  },
+  filterText: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '600',
+  },
+  filterTextActive: {
+    color: '#fff',
   },
   list: {
     padding: 16,
@@ -334,6 +419,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  statusFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  statusFooterText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -344,10 +442,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: 16,
     fontWeight: '600',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
   },
 });

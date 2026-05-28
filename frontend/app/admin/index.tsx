@@ -1,10 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  FlatList,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { exportMonthlyReport } from '../../src/utils/pdfExport';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+const MONTH_NAMES = [
+  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+];
+
+function getMonthOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [];
+  const now = new Date();
+  
+  // Last 12 months
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    options.push({ value, label });
+  }
+  return options;
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -14,7 +43,12 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const router = useRouter();
+  const [monthModalVisible, setMonthModalVisible] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
+
+  const monthOptions = getMonthOptions();
 
   useEffect(() => {
     fetchStats();
@@ -23,29 +57,24 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      
-      // Fetch users
+
       const usersResponse = await fetch(`${BACKEND_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const users = await usersResponse.json();
-      
-      // Fetch approvals
+
       const approvalsResponse = await fetch(`${BACKEND_URL}/api/approvals`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const approvals = await approvalsResponse.json();
-      
-      // Fetch current month entries
+
       const currentMonth = new Date().toISOString().slice(0, 7);
       const entriesResponse = await fetch(
         `${BACKEND_URL}/api/time-entries?month=${currentMonth}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       const entries = await entriesResponse.json();
-      
+
       const totalHours = entries
         .filter((e: any) => e.status === 'approved' && e.entry_type === 'work')
         .reduce((sum: number, e: any) => sum + e.hours, 0);
@@ -62,79 +91,27 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleExport = async () => {
-    Alert.alert(
-      'Esporta Consuntivo',
-      'Seleziona il mese da esportare',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Mese Corrente',
-          onPress: () => exportMonth(new Date().toISOString().slice(0, 7)),
-        },
-      ]
-    );
-  };
-
-  const exportMonth = async (month: string) => {
+  const handleExport = async (month: string) => {
+    setMonthModalVisible(false);
     setExporting(true);
     try {
       const token = await AsyncStorage.getItem('token');
       const response = await fetch(
         `${BACKEND_URL}/api/time-entries?month=${month}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       const entries = await response.json();
-      
-      // Group by employee
-      const byEmployee: any = {};
-      entries.forEach((entry: any) => {
-        if (!byEmployee[entry.user_name]) {
-          byEmployee[entry.user_name] = {
-            workHours: 0,
-            vacationDays: 0,
-            sickDays: 0,
-            permitHours: 0,
-            entries: [],
-          };
-        }
-        
-        byEmployee[entry.user_name].entries.push(entry);
-        
-        if (entry.status === 'approved') {
-          if (entry.entry_type === 'work') {
-            byEmployee[entry.user_name].workHours += entry.hours;
-          } else if (entry.entry_type === 'vacation') {
-            byEmployee[entry.user_name].vacationDays += 1;
-          } else if (entry.entry_type === 'sick') {
-            byEmployee[entry.user_name].sickDays += 1;
-          } else if (entry.entry_type === 'permit') {
-            byEmployee[entry.user_name].permitHours += entry.hours;
-          }
-        }
-      });
 
-      // Create summary text
-      let summary = `CONSUNTIVO ORARI - ${month}\n`;
-      summary += `THE ROOM BARBERIA\n\n`;
-      summary += `================================\n\n`;
-      
-      Object.keys(byEmployee).forEach((name) => {
-        const data = byEmployee[name];
-        summary += `${name}:\n`;
-        summary += `  Ore lavorate: ${data.workHours}h\n`;
-        summary += `  Giorni ferie: ${data.vacationDays}\n`;
-        summary += `  Giorni malattia: ${data.sickDays}\n`;
-        summary += `  Ore permessi: ${data.permitHours}h\n`;
-        summary += `\n`;
-      });
+      if (entries.length === 0) {
+        Alert.alert('Attenzione', 'Nessuna voce trovata per il mese selezionato');
+        setExporting(false);
+        return;
+      }
 
-      Alert.alert('Consuntivo', summary, [{ text: 'OK' }]);
+      await exportMonthlyReport(entries, month);
     } catch (error) {
       console.error('Error exporting:', error);
-      Alert.alert('Errore', 'Errore durante esportazione');
+      Alert.alert('Errore', 'Errore durante la generazione del PDF');
     } finally {
       setExporting(false);
     }
@@ -180,21 +157,67 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.exportButton}
-          onPress={handleExport}
-          disabled={exporting}
-        >
-          {exporting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="download-outline" size={24} color="#fff" />
-              <Text style={styles.exportButtonText}>Esporta Consuntivo Mensile</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <View style={styles.exportSection}>
+          <Text style={styles.sectionTitle}>Esportazione Consuntivi</Text>
+          <Text style={styles.sectionDescription}>
+            Genera un report PDF professionale per l&apos;ufficio paghe
+          </Text>
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={() => setMonthModalVisible(true)}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="document-text" size={24} color="#fff" />
+                <Text style={styles.exportButtonText}>Esporta PDF Mensile</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <Modal
+        visible={monthModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMonthModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleziona Mese</Text>
+              <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
+                <Ionicons name="close" size={28} color="#999" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={monthOptions}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.monthOption,
+                    item.value === selectedMonth && styles.monthOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedMonth(item.value);
+                    handleExport(item.value);
+                  }}
+                >
+                  <Text style={styles.monthOptionText}>{item.label}</Text>
+                  {item.value === selectedMonth && (
+                    <Ionicons name="checkmark" size={20} color="#e74c3c" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -249,6 +272,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
   },
+  exportSection: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 16,
+  },
   exportButton: {
     backgroundColor: '#e74c3c',
     flexDirection: 'row',
@@ -257,11 +298,51 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
     borderRadius: 12,
-    marginTop: 8,
   },
   exportButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#0c0c0c',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  monthOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  monthOptionSelected: {
+    backgroundColor: '#1a1a1a',
+  },
+  monthOptionText: {
+    fontSize: 16,
     color: '#fff',
   },
 });

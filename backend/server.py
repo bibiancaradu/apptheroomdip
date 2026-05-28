@@ -382,11 +382,23 @@ async def delete_time_entry(entry_id: str, current_user = Depends(get_current_us
 
 # Approval Routes (Admin only)
 @api_router.get("/approvals", response_model=List[TimeEntryResponse])
-async def get_pending_approvals(current_user = Depends(get_current_user)):
+async def get_pending_approvals(
+    status_filter: Optional[str] = None,
+    current_user = Depends(get_current_user)
+):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Solo gli amministratori possono accedere a questa risorsa")
     
-    entries = await db.time_entries.find({"status": "pending"}).sort("date", -1).to_list(1000)
+    # Filter only requestable types (vacation, permit) regardless of status
+    query: dict = {"entry_type": {"$in": ["vacation", "permit"]}}
+    
+    if status_filter and status_filter in ["pending", "approved", "rejected"]:
+        query["status"] = status_filter
+    else:
+        # Default: only show pending
+        query["status"] = "pending"
+    
+    entries = await db.time_entries.find(query).sort("date", -1).to_list(1000)
     return [TimeEntryResponse(
         id=str(entry["_id"]),
         user_id=entry["user_id"],

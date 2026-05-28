@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "THE ROOM BARBERIA",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,14 +9,18 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "Ricevi promemoria per inserire le ore"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": ["NOTIFICATIONS", "SCHEDULE_EXACT_ALARM"]
     },
     "web": {
       "bundler": "metro",
@@ -32,6 +36,12 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#e74c3c"
         }
       ]
     ],
