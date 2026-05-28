@@ -59,3 +59,9 @@ logs/
 # Database backups
 *.dump
 *.sql
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
