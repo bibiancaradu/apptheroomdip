@@ -1,204 +1,199 @@
-# THE ROOM BARBERIA - Guida Deploy in Produzione
+# 🚀 Deploy THE ROOM BARBERIA - Guida Rapida
 
-Questa guida ti accompagna passo-passo nel deploy dell'app in produzione.
+## ⚠️ IMPORTANTE - Leggi prima di iniziare
 
-## 📋 Indice
+### Per il **Backend** (FastAPI + MongoDB):
+- ✅ **USA Render.com** (FUNZIONA - guida sotto)
+- ❌ **NON usare Vercel** per il backend (FastAPI non funziona bene su Vercel serverless con MongoDB persistent)
 
-1. [Opzione 1: Railway.app (€)](#opzione-1-railwayapp-consigliato)
-2. [Opzione 2: Render.com + MongoDB Atlas (Gratis)](#opzione-2-rendercom--mongodb-atlas-gratis)
-3. [Build Mobile App](#build-mobile-app)
-4. [Configurazione Post-Deploy](#configurazione-post-deploy)
+### Per il **Frontend** (App Mobile):
+- ✅ **USA Expo EAS Build** per generare APK Android (la SOLUZIONE GIUSTA per i tuoi dipendenti)
+- ⚠️ **Vercel** può ospitare solo la versione WEB dell'app, NON quella mobile
 
 ---
 
-## Opzione 1: Railway.app (CONSIGLIATO)
+## 🎯 SOLUZIONE CONSIGLIATA (Funziona al 100%)
 
-**Costo**: ~5€/mese | **Difficoltà**: ⭐ Facile | **Tempo**: 10 minuti
+```
+┌─────────────────────────────────────────────────────┐
+│  Backend → Render.com (Python Web Service)          │
+│  Database → MongoDB Atlas (già configurato ✅)      │
+│  App Mobile → Expo EAS Build → APK Android         │
+└─────────────────────────────────────────────────────┘
+```
 
-### Passo 1: Crea Account Railway
-1. Vai su [railway.app](https://railway.app)
-2. Registrati con il tuo account GitHub
-3. Aggiungi metodo di pagamento (carta o PayPal)
+---
 
-### Passo 2: Deploy MongoDB
-1. Click "New Project" → "Provision MongoDB"
-2. Railway creerà un MongoDB pronto all'uso
-3. Click sul servizio MongoDB → "Variables" → copia `MONGO_URL`
+## 📦 PASSO 1: Deploy Backend su Render
 
-### Passo 3: Deploy Backend
-1. Nel progetto, click "New" → "GitHub Repo"
-2. Seleziona il repository `theroom-barberia-app`
-3. Railway rileverà la cartella `backend/`
-4. Vai in "Settings" → "Root Directory" → imposta `backend`
-5. Vai in "Variables" e aggiungi:
+### 1.1 Vai su Render.com
+1. Vai su [render.com](https://render.com) e fai login con GitHub
+2. Click **"New +"** → **"Web Service"**
+3. Connetti il tuo repository GitHub `theroom-barberia-app`
+
+### 1.2 Configura il Servizio
+Compila ESATTAMENTE così:
+
+| Campo | Valore |
+|-------|--------|
+| **Name** | `theroom-barberia-backend` |
+| **Region** | Frankfurt (più vicina all'Italia) |
+| **Branch** | `main` |
+| **Root Directory** | `backend` |
+| **Runtime** | `Python 3` |
+| **Build Command** | `pip install -r requirements.txt` |
+| **Start Command** | `uvicorn server:app --host 0.0.0.0 --port $PORT` |
+| **Plan** | `Free` |
+
+### 1.3 Aggiungi le Variabili d'Ambiente
+Click su **"Environment"** e aggiungi queste 3 variabili:
+
+| Key | Value |
+|-----|-------|
+| `MONGO_URL` | `mongodb+srv://USER:PASS@cluster.mongodb.net/...` *(la tua connection string MongoDB Atlas)* |
+| `DB_NAME` | `theroom_barberia` |
+| `SECRET_KEY` | Click "Generate" oppure inserisci una stringa casuale lunga |
+
+### 1.4 Deploy!
+1. Click **"Create Web Service"**
+2. Attendi **5-10 minuti** per il primo build
+3. Quando vedi "Your service is live 🎉" prendi nota dell'URL, tipo:
    ```
-   MONGO_URL=<URL copiata da MongoDB step 2>
-   DB_NAME=theroom_barberia
-   SECRET_KEY=<genera con: openssl rand -hex 32>
+   https://theroom-barberia-backend.onrender.com
    ```
-6. Vai in "Settings" → "Generate Domain" → otterrai un URL tipo `theroom-backend.up.railway.app`
 
-### Passo 4: Inizializza Database
+### 1.5 Inizializza il Database
+Apri il terminale e lancia (sostituisci con il tuo URL):
 ```bash
-curl -X POST https://theroom-backend.up.railway.app/api/seed
+curl -X POST https://theroom-barberia-backend.onrender.com/api/seed
 ```
 
-✅ **Backend pronto in produzione!**
+Dovresti ricevere:
+```json
+{
+  "message": "Database inizializzato con successo",
+  "users": [...]
+}
+```
 
----
-
-## Opzione 2: Render.com + MongoDB Atlas (Gratis)
-
-**Costo**: 0€/mese | **Difficoltà**: ⭐⭐ Medio | **Tempo**: 20 minuti
-
-### Passo 1: Setup MongoDB Atlas (Gratis)
-1. Vai su [mongodb.com/cloud/atlas](https://mongodb.com/cloud/atlas)
-2. Registrati e crea un **M0 Cluster** (Free Forever)
-3. Crea un utente database in "Database Access"
-4. Aggiungi IP `0.0.0.0/0` in "Network Access" (consente accesso da Render)
-5. Click "Connect" → "Connect your application" → copia la connection string
-   ```
-   mongodb+srv://USERNAME:PASSWORD@cluster0.xxxxx.mongodb.net/theroom_barberia
-   ```
-
-### Passo 2: Deploy Backend su Render
-1. Vai su [render.com](https://render.com) e registrati
-2. Click "New" → "Web Service"
-3. Connetti il tuo GitHub e seleziona `theroom-barberia-app`
-4. Configurazione:
-   - **Name**: `theroom-backend`
-   - **Root Directory**: `backend`
-   - **Environment**: `Python 3`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
-   - **Plan**: Free
-5. In "Environment Variables" aggiungi:
-   ```
-   MONGO_URL=<connection string da Atlas>
-   DB_NAME=theroom_barberia
-   SECRET_KEY=<chiave casuale sicura>
-   ```
-6. Click "Create Web Service"
-7. Aspetta 5-10 minuti per il primo deploy
-8. URL pubblico: `https://theroom-backend.onrender.com`
-
-### Passo 3: Inizializza Database
+### 1.6 Verifica che Funzioni
 ```bash
-curl -X POST https://theroom-backend.onrender.com/api/seed
+curl https://theroom-barberia-backend.onrender.com/api/auth/login \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"username":"marius","password":"marius2025"}'
 ```
 
-✅ **Backend gratuito attivo!**
-
-> ⚠️ **Nota Render Free Tier**: Il backend si ferma dopo 15 minuti di inattività. Riparte automaticamente alla prima richiesta (impiega 30-60 secondi). Per produzione seria, considera il piano a 7$/mese.
+Se vedi un `access_token`, **🎉 IL BACKEND È ONLINE!**
 
 ---
 
-## Build Mobile App
+## 📱 PASSO 2: Genera l'App Android (APK)
 
-Una volta che il backend è online, aggiorna l'app frontend e genera le build.
-
-### Passo 1: Aggiorna Frontend
-Modifica `frontend/.env`:
+### 2.1 Aggiorna il file .env del frontend
+Nel tuo computer, modifica `frontend/.env`:
 ```
-EXPO_PUBLIC_BACKEND_URL=https://il-tuo-backend-url.com
+EXPO_PUBLIC_BACKEND_URL=https://theroom-barberia-backend.onrender.com
 ```
 
-### Passo 2: Setup EAS Build (Gratis)
+### 2.2 Setup EAS Build (gratis)
 ```bash
 cd frontend
 
-# Installa EAS CLI
+# Installa EAS CLI globalmente
 npm install -g eas-cli
 
-# Login con account Expo gratuito
+# Login con account Expo (gratis, crealo se non l'hai)
 eas login
 
-# Configura il progetto
+# Configura il progetto per le build
 eas build:configure
 ```
 
-### Passo 3: Build Android (.apk)
+### 2.3 Genera l'APK
 ```bash
-# Build APK installabile direttamente
+# Build per Android (APK installabile)
 eas build --platform android --profile preview
-
-# Aspetta 10-15 minuti
-# Riceverai un link per scaricare l'APK
 ```
 
-### Passo 4: Distribuisci ai Dipendenti
-1. Scarica l'APK dal link Expo
-2. Invia ai dipendenti via WhatsApp/Email
-3. Loro devono abilitare "Origini sconosciute" su Android e installarlo
-4. ✅ App installata!
+- Aspetta 10-15 minuti
+- Riceverai un **link** per scaricare l'APK
+- Esempio: `https://expo.dev/artifacts/eas/abc123.apk`
 
-### Build iOS (Opzionale)
-```bash
-eas build --platform ios --profile preview
-```
-⚠️ Richiede account Apple Developer (99$/anno)
+### 2.4 Distribuisci ai Dipendenti
+1. **Scarica l'APK** dal link Expo
+2. **Invia ai dipendenti** via WhatsApp/Email
+3. I dipendenti devono:
+   - Aprire il link APK sul telefono Android
+   - Permettere "Origini sconosciute" nelle impostazioni
+   - Installare l'app
+4. ✅ **Login con le credenziali** che hai impostato
 
 ---
 
-## Configurazione Post-Deploy
+## ⚠️ NOTE IMPORTANTI su Render Free Tier
 
-### 🔐 Cambia le Password di Default
-Dopo il primo login come `marius`:
-1. Vai in "Dipendenti"
-2. Per ogni dipendente, click ✏️ → cambia password
-3. Comunica le nuove password ai dipendenti
+### Sleep Automatico (15 minuti di inattività)
+- Il backend si "addormenta" dopo 15 min senza richieste
+- La prima richiesta successiva impiega **30-60 secondi** a rispondere
+- **Soluzione**: usa un servizio gratuito come [UptimeRobot](https://uptimerobot.com) per fare ping ogni 5 min e tenerlo sveglio
 
-### 📊 Backup Database
-**MongoDB Atlas**: Backup automatici inclusi
-**Railway**: Backup giornalieri automatici
-**Self-hosted**: Configura backup manuali
+### Per Produzione Seria
+Upgrade a **Render Starter** ($7/mese): no sleep, performance migliori, build più veloci
 
-### 🔔 Notifiche Push
-Le notifiche locali (lunedì alle 9:00) funzionano già nelle build APK/IPA. Non richiede configurazione aggiuntiva.
+---
 
-### 🌐 Dominio Personalizzato (Opzionale)
-Sia Railway che Render permettono domini custom:
-- Esempio: `api.theroombarberia.it`
-- Richiede dominio registrato (~10€/anno)
+## ❌ Problemi Risolti Rispetto alla Versione Precedente
+
+| Problema | Soluzione Applicata |
+|----------|---------------------|
+| `requirements.txt` con 125 pacchetti inutili | ✅ Ridotto a 11 pacchetti essenziali |
+| `litellm` con URL Emergent non accessibile | ✅ Rimosso (non necessario) |
+| Porta hardcoded 8001 | ✅ Ora usa `$PORT` di Render |
+| Manca `Procfile` | ✅ Aggiunto |
+| Manca `runtime.txt` per Python version | ✅ Aggiunto (Python 3.11.9) |
+| Manca `render.yaml` blueprint | ✅ Aggiunto (deploy con 1 click) |
 
 ---
 
 ## 🆘 Troubleshooting
 
-### Backend non risponde
-- Controlla i log su Railway/Render
-- Verifica le variabili d'ambiente
-- Controlla connessione MongoDB
+### Errore: "Application failed to respond"
+- Verifica che `MONGO_URL` sia corretto nelle env variables
+- Controlla i log su Render Dashboard → Logs
 
-### App mobile non si connette
-- Verifica `EXPO_PUBLIC_BACKEND_URL` nel `.env`
-- Rigenera la build dopo modifica `.env`
-- Controlla che il backend sia accessibile da browser
+### Errore: "Build failed"
+- Verifica che **Root Directory** sia `backend` (non vuoto)
+- Verifica che Python version sia 3.11
 
-### Database vuoto dopo deploy
-- Esegui il comando seed: `curl -X POST <BACKEND_URL>/api/seed`
+### Errore: "MongoDB connection failed"
+- Controlla che IP `0.0.0.0/0` sia in whitelist su MongoDB Atlas (Network Access)
+- Verifica username/password nella connection string
 
----
-
-## 💰 Costi Riepilogativi
-
-| Componente | Gratuito | Pagamento |
-|------------|----------|-----------|
-| MongoDB Atlas (512MB) | ✅ | - |
-| Render.com (con sleep) | ✅ | $7/mese (no sleep) |
-| Railway.app | ❌ | ~$5/mese |
-| Expo (build illimitate) | ✅ | - |
-| Apple Developer (iOS) | ❌ | $99/anno |
-| Google Play (Android) | ❌ | $25 una tantum |
-
-**Setup consigliato GRATIS**: MongoDB Atlas + Render + Build APK Android = **0€/mese** 🎉
+### L'app mobile non si connette al backend
+- Verifica `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env`
+- **Rigenera la build APK** dopo aver modificato `.env`
+- Testa il backend con `curl` per verificare che risponda
 
 ---
 
-## 📞 Supporto
+## 📊 Costi Finali
 
-Per problemi specifici:
-- MongoDB Atlas: [docs.atlas.mongodb.com](https://docs.atlas.mongodb.com)
-- Railway: [docs.railway.app](https://docs.railway.app)
-- Render: [render.com/docs](https://render.com/docs)
-- Expo: [docs.expo.dev](https://docs.expo.dev)
+| Servizio | Costo |
+|----------|-------|
+| MongoDB Atlas (M0) | **GRATIS** ✅ |
+| Render Free Tier | **GRATIS** ✅ (con sleep) |
+| Render Starter (opzionale, no sleep) | $7/mese |
+| Expo EAS Build | **GRATIS** ✅ |
+| **TOTALE** | **0€/mese** 🎉 |
+
+---
+
+## 🎯 Riepilogo Finale
+
+1. ✅ MongoDB Atlas → Già configurato
+2. 📦 **Push i nuovi file su GitHub**
+3. 🚀 Deploy su Render (segui passo 1 sopra)
+4. 📱 Genera APK con EAS Build (passo 2)
+5. 💈 Distribuisci ai dipendenti THE ROOM BARBERIA
+
+**Buon lavoro!** Se hai problemi specifici, manda screenshot degli errori 🙌
