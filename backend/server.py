@@ -203,7 +203,11 @@ async def update_user(user_id: str, user_data: UserCreate, current_user = Depend
         raise HTTPException(status_code=403, detail="Solo gli amministratori possono modificare utenti")
     
     user_dict = user_data.dict()
-    user_dict["password"] = get_password_hash(user_dict["password"])
+    # If password is empty, don't update it
+    if not user_dict.get("password"):
+        user_dict.pop("password", None)
+    else:
+        user_dict["password"] = get_password_hash(user_dict["password"])
     
     result = await db.users.update_one(
         {"_id": ObjectId(user_id)},
