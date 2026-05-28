@@ -1,0 +1,12 @@
+{
+  "buildCommand": "yarn install && npx expo export --platform web",
+  "outputDirectory": "dist",
+  "framework": null,
+  "installCommand": "yarn install",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
