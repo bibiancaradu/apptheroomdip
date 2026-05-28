@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -50,8 +51,17 @@ export default function AdminProfileScreen() {
           text: 'Esci',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.clear();
-            router.replace('/login');
+            try {
+              await AsyncStorage.clear();
+              // Force reload on web, router.replace on native
+              if (Platform.OS === 'web') {
+                window.location.href = '/login';
+              } else {
+                router.replace('/login');
+              }
+            } catch (error) {
+              console.error('Logout error:', error);
+            }
           },
         },
       ]
