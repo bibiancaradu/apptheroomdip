@@ -453,6 +453,48 @@ async def approve_or_reject_entry(
     )
 
 
+# Reset and re-seed users (use when migrating from old passlib hashes)
+@api_router.post("/reset-users")
+async def reset_users():
+    try:
+        # Delete all existing users
+        result = await db.users.delete_many({})
+        deleted_count = result.deleted_count
+        
+        # Recreate users with new bcrypt-direct hashing
+        users_data = [
+            {"name": "Marius", "username": "marius", "password": get_password_hash("marius2025"), "role": "admin", "created_at": datetime.utcnow()},
+            {"name": "Jessica", "username": "jessica", "password": get_password_hash("jessica2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Andrea", "username": "andrea", "password": get_password_hash("andrea2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Francesca", "username": "francesca", "password": get_password_hash("francesca2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Giada", "username": "giada", "password": get_password_hash("giada2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Leonardo", "username": "leonardo", "password": get_password_hash("leonardo2025"), "role": "employee", "created_at": datetime.utcnow()},
+        ]
+        
+        await db.users.insert_many(users_data)
+        
+        return {
+            "message": "Utenti resettati con successo",
+            "deleted": deleted_count,
+            "created": len(users_data),
+            "users": [
+                {"username": "marius", "password": "marius2025", "role": "admin"},
+                {"username": "jessica", "password": "jessica2025", "role": "employee"},
+                {"username": "andrea", "password": "andrea2025", "role": "employee"},
+                {"username": "francesca", "password": "francesca2025", "role": "employee"},
+                {"username": "giada", "password": "giada2025", "role": "employee"},
+                {"username": "leonardo", "password": "leonardo2025", "role": "employee"},
+            ]
+        }
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail={
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        })
+
+
 # Seed initial data
 @api_router.post("/seed")
 async def seed_data():
