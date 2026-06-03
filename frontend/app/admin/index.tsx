@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -103,7 +104,11 @@ export default function AdminDashboard() {
       const entries = await response.json();
 
       if (entries.length === 0) {
-        Alert.alert('Attenzione', 'Nessuna voce trovata per il mese selezionato');
+        if (Platform.OS === 'web') {
+          window.alert('Nessuna voce trovata per il mese selezionato');
+        } else {
+          Alert.alert('Attenzione', 'Nessuna voce trovata per il mese selezionato');
+        }
         setExporting(false);
         return;
       }
@@ -111,7 +116,11 @@ export default function AdminDashboard() {
       await exportMonthlyReport(entries, month);
     } catch (error) {
       console.error('Error exporting:', error);
-      Alert.alert('Errore', 'Errore durante la generazione del PDF');
+      if (Platform.OS === 'web') {
+        window.alert('Errore durante la generazione del PDF');
+      } else {
+        Alert.alert('Errore', 'Errore durante la generazione del PDF');
+      }
     } finally {
       setExporting(false);
     }

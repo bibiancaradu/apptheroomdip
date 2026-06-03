@@ -42,30 +42,33 @@ export default function AdminProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Conferma',
-      'Vuoi uscire?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Esci',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.clear();
-              // Force reload on web, router.replace on native
-              if (Platform.OS === 'web') {
-                window.location.href = '/login';
-              } else {
-                router.replace('/login');
-              }
-            } catch (error) {
-              console.error('Logout error:', error);
-            }
-          },
-        },
-      ]
-    );
+    const performLogout = async () => {
+      try {
+        await AsyncStorage.clear();
+        if (Platform.OS === 'web') {
+          window.location.href = '/login';
+        } else {
+          router.replace('/login');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Vuoi uscire?')) {
+        performLogout();
+      }
+    } else {
+      Alert.alert(
+        'Conferma',
+        'Vuoi uscire?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Esci', style: 'destructive', onPress: performLogout },
+        ]
+      );
+    }
   };
 
   if (loading) {

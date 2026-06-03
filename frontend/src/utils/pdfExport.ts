@@ -382,15 +382,49 @@ export async function exportMonthlyReport(
     const html = generateHTML(month, byEmployee);
 
     if (Platform.OS === 'web') {
-      const win = window.open('', '_blank');
-      if (win) {
-        win.document.write(html);
-        win.document.close();
-        setTimeout(() => win.print(), 500);
+      // Web: Create a Blob and open in a new tab with auto-print
+      // This works on Vercel and bypasses popup blockers when triggered by user action
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      // Try to open in new tab
+      const newWindow = window.open(url, '_blank');
+      
+      if (newWindow) {
+        // Wait for content to load, then trigger print
+        newWindow.addEventListener('load', () => {
+          setTimeout(() => {
+            try {
+              newWindow.print();
+            } catch (e) {
+              console.log('Print failed, user can manually print');
+            }
+          }, 500);
+        });
+      } else {
+        // Popup blocked - fallback: download as HTML file
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `consuntivo_${month}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(
+          'Il file HTML è stato scaricato.\n\n' +
+          'Per ottenere il PDF:\n' +
+          '1. Apri il file scaricato\n' +
+          '2. Premi Ctrl+P (o Cmd+P su Mac)\n' +
+          '3. Seleziona "Salva come PDF"'
+        );
       }
+      
+      // Clean up after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       return;
     }
 
+    // Mobile: Generate PDF and share
     const { uri } = await Print.printToFileAsync({ html, base64: false });
 
     const isAvailable = await Sharing.isAvailableAsync();
@@ -405,6 +439,10 @@ export async function exportMonthlyReport(
     }
   } catch (error) {
     console.error('Error exporting PDF:', error);
-    Alert.alert('Errore', 'Impossibile generare il PDF');
+    if (Platform.OS === 'web') {
+      window.alert('Errore: Impossibile generare il PDF. Riprova.');
+    } else {
+      Alert.alert('Errore', 'Impossibile generare il PDF');
+    }
   }
 }

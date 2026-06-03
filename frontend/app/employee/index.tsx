@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,41 +67,55 @@ export default function EmployeeHomeScreen() {
   };
 
   const deleteEntry = async (id: string) => {
-    Alert.alert(
-      'Conferma',
-      'Vuoi eliminare questa voce?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('token');
-              const response = await fetch(
-                `${BACKEND_URL}/api/time-entries/${id}`,
-                {
-                  method: 'DELETE',
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                }
-              );
+    const performDelete = async () => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        const response = await fetch(
+          `${BACKEND_URL}/api/time-entries/${id}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
-              if (response.ok) {
-                fetchEntries();
-                Alert.alert('Successo', 'Voce eliminata');
-              } else {
-                const data = await response.json();
-                Alert.alert('Errore', data.detail);
-              }
-            } catch (error) {
-              Alert.alert('Errore', 'Errore di connessione');
-            }
-          },
-        },
-      ]
-    );
+        if (response.ok) {
+          fetchEntries();
+          if (Platform.OS === 'web') {
+            window.alert('Voce eliminata');
+          } else {
+            Alert.alert('Successo', 'Voce eliminata');
+          }
+        } else {
+          const data = await response.json();
+          if (Platform.OS === 'web') {
+            window.alert('Errore: ' + (data.detail || 'Impossibile eliminare'));
+          } else {
+            Alert.alert('Errore', data.detail);
+          }
+        }
+      } catch (error) {
+        if (Platform.OS === 'web') {
+          window.alert('Errore di connessione');
+        } else {
+          Alert.alert('Errore', 'Errore di connessione');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Vuoi eliminare questa voce?')) {
+        performDelete();
+      }
+    } else {
+      Alert.alert(
+        'Conferma',
+        'Vuoi eliminare questa voce?',
+        [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Elimina', style: 'destructive', onPress: performDelete },
+        ]
+      );
+    }
   };
 
   const getStatusColor = (status: string) => {
