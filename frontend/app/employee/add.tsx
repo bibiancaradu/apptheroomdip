@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -30,14 +29,24 @@ const ENTRY_TYPES: { value: EntryType; label: string; icon: any; color: string }
 ];
 
 export default function AddEntryScreen() {
+  const params = useLocalSearchParams<{ date?: string }>();
   const [date, setDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [hours, setHours] = useState('');
   const [location, setLocation] = useState<Location>('Costabissara');
   const [entryType, setEntryType] = useState<EntryType>('work');
   const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Pre-fill date from URL params (when coming from calendar)
+  useEffect(() => {
+    if (params.date) {
+      const parsed = new Date(params.date);
+      if (!isNaN(parsed.getTime())) {
+        setDate(parsed);
+      }
+    }
+  }, [params.date]);
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -76,7 +85,6 @@ export default function AddEntryScreen() {
         setHours('');
         setComments('');
         setEntryType('work');
-        // Navigate to home tab instead of router.back()
         router.replace('/employee');
       } else {
         const data = await response.json();
@@ -90,20 +98,28 @@ export default function AddEntryScreen() {
     }
   };
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDate(selectedDate);
-    }
+  const changeDate = (days: number) => {
+    const newDate = new Date(date);
+    newDate.setDate(newDate.getDate() + days);
+    setDate(newDate);
+  };
+
+  const goToToday = () => {
+    setDate(new Date());
   };
 
   const formatDate = (d: Date) => {
     return d.toLocaleDateString('it-IT', {
-      weekday: 'short',
+      weekday: 'long',
       day: 'numeric',
-      month: 'short',
+      month: 'long',
       year: 'numeric',
     });
+  };
+
+  const isToday = (d: Date) => {
+    const today = new Date();
+    return d.toDateString() === today.toDateString();
   };
 
   return (
@@ -113,42 +129,61 @@ export default function AddEntryScreen() {
     >
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.form}>
-          {/* Date */}
+          {/* Date with Arrow Navigation */}
           <View style={styles.field}>
             <Text style={styles.label}>📅 Data</Text>
-            {Platform.OS === 'web' ? (
-              <TextInput
-                style={styles.input}
-                value={date.toISOString().split('T')[0]}
-                onChangeText={(text) => {
-                  const newDate = new Date(text);
-                  if (!isNaN(newDate.getTime())) {
-                    setDate(newDate);
-                  }
-                }}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#666"
-                {...({ type: 'date' } as any)}
-              />
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Ionicons name="calendar" size={20} color="#e74c3c" />
-                  <Text style={styles.dateText}>{formatDate(date)}</Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={date}
-                    mode="date"
-                    display="default"
-                    onChange={onDateChange}
-                  />
+            <View style={styles.dateNavigator}>
+              <TouchableOpacity
+                style={styles.dateArrowButton}
+                onPress={() => changeDate(-1)}
+              >
+                <Ionicons name="chevron-back" size={28} color="#e74c3c" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateDisplay}
+                onPress={goToToday}
+              >
+                <Text style={styles.dateText}>{formatDate(date)}</Text>
+                {!isToday(date) && (
+                  <Text style={styles.todayHint}>Tocca per &quot;oggi&quot;</Text>
                 )}
-              </>
-            )}
+                {isToday(date) && (
+                  <View style={styles.todayBadge}>
+                    <Text style={styles.todayBadgeText}>OGGI</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateArrowButton}
+                onPress={() => changeDate(1)}
+              >
+                <Ionicons name="chevron-forward" size={28} color="#e74c3c" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick date jumps */}
+            <View style={styles.quickJumps}>
+              <TouchableOpacity
+                style={styles.quickJumpButton}
+                onPress={() => changeDate(-7)}
+              >
+                <Text style={styles.quickJumpText}>-7 giorni</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickJumpButton}
+                onPress={() => changeDate(-1)}
+              >
+                <Text style={styles.quickJumpText}>Ieri</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickJumpButton, isToday(date) && styles.quickJumpButtonActive]}
+                onPress={goToToday}
+              >
+                <Text style={[styles.quickJumpText, isToday(date) && styles.quickJumpTextActive]}>Oggi</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Hours */}
@@ -214,7 +249,7 @@ export default function AddEntryScreen() {
             </View>
           </View>
 
-          {/* Entry Type - Visible Buttons */}
+          {/* Entry Type */}
           <View style={styles.field}>
             <Text style={styles.label}>🏷️ Tipo</Text>
             <View style={styles.typeGrid}>
@@ -324,20 +359,75 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  dateButton: {
+  dateNavigator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+    overflow: 'hidden',
+  },
+  dateArrowButton: {
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+  },
+  dateDisplay: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    textAlign: 'center',
+  },
+  todayHint: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
+  },
+  todayBadge: {
+    backgroundColor: '#e74c3c',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  todayBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  quickJumps: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickJumpButton: {
+    flex: 1,
     backgroundColor: '#1a1a1a',
     borderWidth: 1,
     borderColor: '#333',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
+    borderRadius: 8,
+    paddingVertical: 8,
     alignItems: 'center',
-    gap: 10,
   },
-  dateText: {
-    fontSize: 16,
-    color: '#fff',
-    textTransform: 'capitalize',
+  quickJumpButtonActive: {
+    backgroundColor: '#e74c3c22',
+    borderColor: '#e74c3c',
+  },
+  quickJumpText: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '600',
+  },
+  quickJumpTextActive: {
+    color: '#e74c3c',
   },
   optionsGrid: {
     flexDirection: 'row',

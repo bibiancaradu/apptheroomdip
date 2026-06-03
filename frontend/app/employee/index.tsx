@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -36,6 +37,13 @@ export default function EmployeeHomeScreen() {
   useEffect(() => {
     fetchEntries();
   }, [selectedMonth]);
+
+  // Refresh data every time the screen comes into focus (e.g. after adding entry)
+  useFocusEffect(
+    useCallback(() => {
+      fetchEntries();
+    }, [selectedMonth])
+  );
 
   const fetchEntries = async () => {
     try {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -57,10 +58,28 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetchEntries();
   }, []);
+
+  // Refresh data every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchEntries();
+    }, [])
+  );
+
+  const handleAddForDate = () => {
+    if (selectedDate) {
+      setModalVisible(false);
+      router.push({
+        pathname: '/employee/add',
+        params: { date: selectedDate },
+      });
+    }
+  };
 
   const fetchEntries = async () => {
     try {
@@ -179,6 +198,15 @@ export default function CalendarScreen() {
             </View>
 
             <ScrollView style={styles.modalBody}>
+              {/* Add button - always visible */}
+              <TouchableOpacity
+                style={styles.addEntryButton}
+                onPress={handleAddForDate}
+              >
+                <Ionicons name="add-circle" size={22} color="#fff" />
+                <Text style={styles.addEntryButtonText}>Aggiungi voce per questo giorno</Text>
+              </TouchableOpacity>
+
               {selectedEntries.length === 0 ? (
                 <View style={styles.emptyDay}>
                   <Ionicons name="calendar-outline" size={48} color="#444" />
@@ -287,6 +315,21 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 16,
+  },
+  addEntryButton: {
+    backgroundColor: '#e74c3c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  addEntryButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   emptyDay: {
     alignItems: 'center',
