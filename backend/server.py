@@ -456,34 +456,66 @@ async def approve_or_reject_entry(
 # Seed initial data
 @api_router.post("/seed")
 async def seed_data():
-    # Check if already seeded
-    existing_users = await db.users.count_documents({})
-    if existing_users > 0:
-        return {"message": "Database già inizializzato"}
-    
-    # Create initial users
-    users_data = [
-        {"name": "Marius", "username": "marius", "password": get_password_hash("marius2025"), "role": "admin", "created_at": datetime.utcnow()},
-        {"name": "Jessica", "username": "jessica", "password": get_password_hash("jessica2025"), "role": "employee", "created_at": datetime.utcnow()},
-        {"name": "Andrea", "username": "andrea", "password": get_password_hash("andrea2025"), "role": "employee", "created_at": datetime.utcnow()},
-        {"name": "Francesca", "username": "francesca", "password": get_password_hash("francesca2025"), "role": "employee", "created_at": datetime.utcnow()},
-        {"name": "Giada", "username": "giada", "password": get_password_hash("giada2025"), "role": "employee", "created_at": datetime.utcnow()},
-        {"name": "Leonardo", "username": "leonardo", "password": get_password_hash("leonardo2025"), "role": "employee", "created_at": datetime.utcnow()},
-    ]
-    
-    await db.users.insert_many(users_data)
-    
-    return {
-        "message": "Database inizializzato con successo",
-        "users": [
-            {"username": "marius", "password": "marius2025", "role": "admin"},
-            {"username": "jessica", "password": "jessica2025", "role": "employee"},
-            {"username": "andrea", "password": "andrea2025", "role": "employee"},
-            {"username": "francesca", "password": "francesca2025", "role": "employee"},
-            {"username": "giada", "password": "giada2025", "role": "employee"},
-            {"username": "leonardo", "password": "leonardo2025", "role": "employee"},
+    try:
+        # Check if already seeded
+        existing_users = await db.users.count_documents({})
+        if existing_users > 0:
+            return {"message": "Database già inizializzato", "existing_users": existing_users}
+        
+        # Create initial users
+        users_data = [
+            {"name": "Marius", "username": "marius", "password": get_password_hash("marius2025"), "role": "admin", "created_at": datetime.utcnow()},
+            {"name": "Jessica", "username": "jessica", "password": get_password_hash("jessica2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Andrea", "username": "andrea", "password": get_password_hash("andrea2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Francesca", "username": "francesca", "password": get_password_hash("francesca2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Giada", "username": "giada", "password": get_password_hash("giada2025"), "role": "employee", "created_at": datetime.utcnow()},
+            {"name": "Leonardo", "username": "leonardo", "password": get_password_hash("leonardo2025"), "role": "employee", "created_at": datetime.utcnow()},
         ]
-    }
+        
+        await db.users.insert_many(users_data)
+        
+        return {
+            "message": "Database inizializzato con successo",
+            "users": [
+                {"username": "marius", "password": "marius2025", "role": "admin"},
+                {"username": "jessica", "password": "jessica2025", "role": "employee"},
+                {"username": "andrea", "password": "andrea2025", "role": "employee"},
+                {"username": "francesca", "password": "francesca2025", "role": "employee"},
+                {"username": "giada", "password": "giada2025", "role": "employee"},
+                {"username": "leonardo", "password": "leonardo2025", "role": "employee"},
+            ]
+        }
+    except Exception as e:
+        import traceback
+        error_details = {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+        logger.error(f"Seed failed: {error_details}")
+        raise HTTPException(status_code=500, detail=error_details)
+
+
+# Health check endpoint
+@api_router.get("/health")
+async def health_check():
+    try:
+        # Test MongoDB connection
+        await db.command("ping")
+        users_count = await db.users.count_documents({})
+        return {
+            "status": "ok",
+            "mongodb": "connected",
+            "users_count": users_count,
+            "db_name": os.environ.get('DB_NAME', 'not set')
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "mongodb": "disconnected",
+            "error": str(e),
+            "type": type(e).__name__
+        }
 
 
 # Include the router in the main app
