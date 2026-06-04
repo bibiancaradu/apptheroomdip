@@ -42,6 +42,7 @@ const TYPE_COLORS: { [key: string]: string } = {
   vacation: '#3498db',
   sick: '#e74c3c',
   permit: '#f39c12',
+  holiday: '#e91e63',
   other: '#9b59b6',
 };
 
@@ -50,6 +51,7 @@ const TYPE_LABELS: { [key: string]: string } = {
   vacation: 'Ferie',
   sick: 'Malattia',
   permit: 'Permesso',
+  holiday: 'Festività',
   other: 'Altro',
 };
 

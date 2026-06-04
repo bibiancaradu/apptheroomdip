@@ -10,14 +10,28 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
+import { Calendar, LocaleConfig } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-type EntryType = 'work' | 'vacation' | 'permit' | 'sick' | 'other';
+LocaleConfig.locales['it'] = {
+  monthNames: [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+  ],
+  monthNamesShort: ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'],
+  dayNames: ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'],
+  dayNamesShort: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'],
+  today: 'Oggi',
+};
+LocaleConfig.defaultLocale = 'it';
+
+type EntryType = 'work' | 'vacation' | 'permit' | 'sick' | 'holiday' | 'other';
 type Location = 'Costabissara' | 'Vicenza Est';
 
 const ENTRY_TYPES: { value: EntryType; label: string; icon: any; color: string }[] = [
@@ -25,12 +39,23 @@ const ENTRY_TYPES: { value: EntryType; label: string; icon: any; color: string }
   { value: 'vacation', label: 'Ferie', icon: 'sunny', color: '#3498db' },
   { value: 'permit', label: 'Permesso', icon: 'time', color: '#f39c12' },
   { value: 'sick', label: 'Malattia', icon: 'medkit', color: '#e74c3c' },
+  { value: 'holiday', label: 'Festività', icon: 'gift', color: '#e91e63' },
   { value: 'other', label: 'Altro', icon: 'ellipsis-horizontal', color: '#9b59b6' },
 ];
+
+const QUICK_HOURS = ['4', '4,5', '6', '7', '7,5', '8', '8,5', '9'];
+
+const dateToString = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export default function AddEntryScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
   const [date, setDate] = useState(new Date());
+  const [showCalendar, setShowCalendar] = useState(false);
   const [hours, setHours] = useState('');
   const [location, setLocation] = useState<Location>('Costabissara');
   const [entryType, setEntryType] = useState<EntryType>('work');
@@ -38,7 +63,6 @@ export default function AddEntryScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // Pre-fill date from URL params (when coming from calendar)
   useEffect(() => {
     if (params.date) {
       const parsed = new Date(params.date);
@@ -56,9 +80,16 @@ export default function AddEntryScreen() {
     }
   };
 
+  const parseHours = (input: string): number => {
+    // Accept both comma and dot as decimal separator (Italian users use comma)
+    const normalized = input.replace(',', '.').trim();
+    return parseFloat(normalized);
+  };
+
   const handleSubmit = async () => {
-    if (!hours || parseFloat(hours) <= 0) {
-      showAlert('Errore', 'Inserisci un numero di ore valido');
+    const hoursValue = parseHours(hours);
+    if (!hours || isNaN(hoursValue) || hoursValue <= 0) {
+      showAlert('Errore', 'Inserisci un numero di ore valido (es: 8 oppure 7,5)');
       return;
     }
 
@@ -72,8 +103,8 @@ export default function AddEntryScreen() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          date: date.toISOString().split('T')[0],
-          hours: parseFloat(hours),
+          date: dateToString(date),
+          hours: hoursValue,
           location,
           entry_type: entryType,
           comments: comments || null,
@@ -122,6 +153,11 @@ export default function AddEntryScreen() {
     return d.toDateString() === today.toDateString();
   };
 
+  const onCalendarDayPress = (day: any) => {
+    setDate(new Date(day.dateString));
+    setShowCalendar(false);
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -129,7 +165,7 @@ export default function AddEntryScreen() {
     >
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.form}>
-          {/* Date with Arrow Navigation */}
+          {/* Date with Arrow Navigation + Calendar Tap */}
           <View style={styles.field}>
             <Text style={styles.label}>📅 Data</Text>
             <View style={styles.dateNavigator}>
@@ -142,12 +178,13 @@ export default function AddEntryScreen() {
 
               <TouchableOpacity
                 style={styles.dateDisplay}
-                onPress={goToToday}
+                onPress={() => setShowCalendar(true)}
               >
                 <Text style={styles.dateText}>{formatDate(date)}</Text>
-                {!isToday(date) && (
-                  <Text style={styles.todayHint}>Tocca per &quot;oggi&quot;</Text>
-                )}
+                <View style={styles.dateHint}>
+                  <Ionicons name="calendar" size={12} color="#999" />
+                  <Text style={styles.dateHintText}>Tocca per calendario</Text>
+                </View>
                 {isToday(date) && (
                   <View style={styles.todayBadge}>
                     <Text style={styles.todayBadgeText}>OGGI</Text>
@@ -163,7 +200,6 @@ export default function AddEntryScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Quick date jumps */}
             <View style={styles.quickJumps}>
               <TouchableOpacity
                 style={styles.quickJumpButton}
@@ -186,20 +222,42 @@ export default function AddEntryScreen() {
             </View>
           </View>
 
-          {/* Hours */}
+          {/* Hours with Quick Selectors */}
           <View style={styles.field}>
             <Text style={styles.label}>⏰ Ore Lavorate</Text>
             <TextInput
               style={styles.input}
-              placeholder="Es: 8"
+              placeholder="Es: 8 oppure 7,5 oppure 7,25"
               placeholderTextColor="#666"
               value={hours}
               onChangeText={setHours}
               keyboardType="decimal-pad"
             />
+            <Text style={styles.hint}>Puoi usare la virgola: 7,5 = 7 ore e mezza, 7,25 = 7 ore e un quarto</Text>
+            <View style={styles.quickHoursGrid}>
+              {QUICK_HOURS.map((h) => (
+                <TouchableOpacity
+                  key={h}
+                  style={[
+                    styles.quickHourButton,
+                    hours === h && styles.quickHourButtonActive,
+                  ]}
+                  onPress={() => setHours(h)}
+                >
+                  <Text
+                    style={[
+                      styles.quickHourText,
+                      hours === h && styles.quickHourTextActive,
+                    ]}
+                  >
+                    {h}h
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          {/* Location - Visible Buttons */}
+          {/* Location */}
           <View style={styles.field}>
             <Text style={styles.label}>📍 Sede</Text>
             <View style={styles.optionsGrid}>
@@ -319,6 +377,50 @@ export default function AddEntryScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Calendar Modal */}
+      <Modal
+        visible={showCalendar}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCalendar(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleziona Data</Text>
+              <TouchableOpacity onPress={() => setShowCalendar(false)}>
+                <Ionicons name="close" size={28} color="#999" />
+              </TouchableOpacity>
+            </View>
+            <Calendar
+              current={dateToString(date)}
+              onDayPress={onCalendarDayPress}
+              markedDates={{
+                [dateToString(date)]: {
+                  selected: true,
+                  selectedColor: '#e74c3c',
+                },
+              }}
+              theme={{
+                backgroundColor: '#0c0c0c',
+                calendarBackground: '#0c0c0c',
+                textSectionTitleColor: '#999',
+                selectedDayBackgroundColor: '#e74c3c',
+                selectedDayTextColor: '#fff',
+                todayTextColor: '#e74c3c',
+                dayTextColor: '#fff',
+                textDisabledColor: '#444',
+                monthTextColor: '#fff',
+                arrowColor: '#e74c3c',
+                textMonthFontWeight: 'bold',
+                textDayFontSize: 14,
+                textMonthFontSize: 18,
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -355,6 +457,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
+  hint: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
@@ -386,10 +493,15 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
     textAlign: 'center',
   },
-  todayHint: {
+  dateHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  dateHintText: {
     fontSize: 10,
-    color: '#666',
-    marginTop: 2,
+    color: '#999',
   },
   todayBadge: {
     backgroundColor: '#e74c3c',
@@ -428,6 +540,34 @@ const styles = StyleSheet.create({
   },
   quickJumpTextActive: {
     color: '#e74c3c',
+  },
+  quickHoursGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  quickHourButton: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  quickHourButtonActive: {
+    backgroundColor: '#e74c3c',
+    borderColor: '#e74c3c',
+  },
+  quickHourText: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '600',
+  },
+  quickHourTextActive: {
+    color: '#fff',
   },
   optionsGrid: {
     flexDirection: 'row',
@@ -512,5 +652,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#0c0c0c',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
